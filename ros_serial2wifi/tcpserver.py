@@ -1,38 +1,42 @@
-#!/usr/bin/env python3
-
 import os
 import pty
 import socket
 import select
-import subprocess
 import rclpy
 from rclpy.node import Node
 import time
 
+
 class TcpSocketServerNode(Node):
     def __init__(self):
-        super().__init__('tcp_socket_server_node')
-        
+        super().__init__("tcp_socket_server_node")
+
         # 声明 ROS 2 参数
-        self.declare_parameter('tcp_port', 8889)
-        self.declare_parameter('serial_port', '/tmp/laserport')
-        
+        self.declare_parameter("tcp_port", 8889)
+        self.declare_parameter("serial_port", "/tmp/laserport")
+
         # 获取 ROS 2 参数
-        self.tcp_port = self.get_parameter('tcp_port').get_parameter_value().integer_value
-        self.serial_port = self.get_parameter('serial_port').get_parameter_value().string_value
+        self.tcp_port = (
+            self.get_parameter("tcp_port").get_parameter_value().integer_value
+        )
+        self.serial_port = (
+            self.get_parameter("serial_port").get_parameter_value().string_value
+        )
 
     def run(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(('0.0.0.0', self.tcp_port))
+        s.bind(("0.0.0.0", self.tcp_port))
         s.listen(1)
-        
+
         master, slave = pty.openpty()
         if os.path.exists(self.serial_port):
             os.remove(self.serial_port)
         os.symlink(os.ttyname(slave), self.serial_port)
 
-        self.get_logger().info(f"TCP端口:{self.tcp_port}，已映射到串口设备:{self.serial_port}")
+        self.get_logger().info(
+            f"TCP端口:{self.tcp_port}，已映射到串口设备:{self.serial_port}"
+        )
         mypoll = select.poll()
         mypoll.register(master, select.POLLIN)
         try:
@@ -41,7 +45,7 @@ class TcpSocketServerNode(Node):
                 s.settimeout(None)
                 client, client_address = s.accept()
                 mypoll.register(client.fileno(), select.POLLIN)
-                self.get_logger().info(f'来自{client_address}的连接已建立')
+                self.get_logger().info(f"来自{client_address}的连接已建立")
                 is_connect = True
                 last_exchange_data_time = time.time()
                 try:
@@ -57,9 +61,9 @@ class TcpSocketServerNode(Node):
                             # print(write_fd,data,event)
                             os.write(write_fd, data)
                         # 如果一段时间没有任何数据则断开连接
-                        if time.time()-last_exchange_data_time>5:
+                        if time.time() - last_exchange_data_time > 5:
                             is_connect = False
-                            print('5s no data.')
+                            print("5s no data.")
                             break
                 except Exception:
                     is_connect = False
@@ -70,11 +74,8 @@ class TcpSocketServerNode(Node):
             s.close()
 
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
     node = TcpSocketServerNode()
     node.run()
     rclpy.shutdown()
-
-if __name__ == "__main__":
-    main()
